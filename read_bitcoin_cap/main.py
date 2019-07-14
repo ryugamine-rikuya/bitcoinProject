@@ -12,6 +12,7 @@ import shutil
 import time
 import os
 from multiprocessing import Process
+from datetime import datetime
 
 
 
@@ -282,55 +283,75 @@ def GetBitcoinData(file_path):
 
 def InsertTx(tx_st):
     localLog.debugLog("start InsertTxAddress")
-    sql = "INSERT INTO TX (TX_ID, TIME, SRC_IP, DST_IP) VALUES"
-    con = pymysql.connect(host='127.0.0.1',user='root',password='',db='Bitcoin',charset='utf8',cursorclass=pymysql.cursors.DictCursor)
-    cur = con.cursor()
-    for tx in tx_st:
-        sql += ' ("'
-        sql += tx["TX_ID"] + '", "'
-        sql += tx["TIME"] + '", "'
-        sql += tx["SRC_IP"] + '", "'
-        sql += tx["DST_IP"] + '"),'
-    sql = sql[:-1]
-    try:
-        r = cur.execute(sql)
-    except Exception as e:
-        localLog.warningLog(e)
-        localLog.warningLog(sql)
-    con.commit()
-    con.close()
+    if tx_st != []:
+        sql = "INSERT INTO TX (TX_ID, TIME, SRC_IP, DST_IP) VALUES"
+        con = pymysql.connect(host='127.0.0.1',user='root',password='',db='Bitcoin',charset='utf8',cursorclass=pymysql.cursors.DictCursor)
+        cur = con.cursor()
+        for tx in tx_st:
+            sql += ' ("'
+            sql += tx["TX_ID"] + '", "'
+            sql += tx["TIME"] + '", "'
+            sql += tx["SRC_IP"] + '", "'
+            sql += tx["DST_IP"] + '"),'
+        sql = sql[:-1]
+        try:
+            r = cur.execute(sql)
+        except Exception as e:
+            localLog.warningLog(e)
+            localLog.warningLog(sql)
+        con.commit()
+        con.close()
 
 def InsertTxAddress(tx_address_st):
     localLog.debugLog("start InsertTxAddress")
-    sql = "INSERT INTO TX_ADDRESS (TX_ID, ADDRESS, IN_OUT_FLAG) VALUES"
-    con = pymysql.connect(host='127.0.0.1',user='root',password='',db='Bitcoin',charset='utf8',cursorclass=pymysql.cursors.DictCursor)
-    cur = con.cursor()
-    for tx_address in tx_address_st:
-        sql += ' ("'
-        sql += tx_address["TX_ID"] + '", "'
-        sql += tx_address["ADDRESS"] + '", "'
-        sql += tx_address["IN_OUT_FLAG"] + '"),'
-    sql = sql[:-1]
-    try:
-        r = cur.execute(sql)
-    except Exception as e:
-        localLog.warningLog(e)
-        localLog.warningLog(sql)
-    con.commit()
-    con.close()
+    if tx_address_st != []:
+        sql = "INSERT INTO TX_ADDRESS (TX_ID, ADDRESS, IN_OUT_FLAG) VALUES"
+        con = pymysql.connect(host='127.0.0.1',user='root',password='',db='Bitcoin',charset='utf8',cursorclass=pymysql.cursors.DictCursor)
+        cur = con.cursor()
+        for tx_address in tx_address_st:
+            sql += ' ("'
+            sql += tx_address["TX_ID"] + '", "'
+            sql += tx_address["ADDRESS"] + '", "'
+            sql += tx_address["IN_OUT_FLAG"] + '"),'
+        sql = sql[:-1]
+        try:
+            r = cur.execute(sql)
+        except Exception as e:
+            localLog.warningLog(e)
+            localLog.warningLog(sql)
+        con.commit()
+        con.close()
+
+def CheckFileTime(file_path):
+    file_ts = os.stat(file_path).st_mtime
+    now = datetime.now()
+    now_ts = now.timestamp()
+    diff_ts = now_ts - file_ts
+    if diff_ts > 50:
+        return True
+    else:
+        return False
 
 def ProcessCapFile(file_path):
-    new_file_path = shutil.move(file_path, './data')
-    localLog.infoLog("start to process : ", new_file_path)
-    tx_st, tx_address_st = GetBitcoinData(new_file_path)
-    InsertTx(tx_st)
-    InsertTxAddress(tx_address_st)
-    os.remove(new_file_path)
-    localLog.infoLog("finish to process : ", new_file_path)
+    if CheckFileTime(file_path):
+        new_file_path = shutil.move(file_path, './tmp/')
+        localLog.infoLog("start to process : ", new_file_path)
+        tx_st, tx_address_st = GetBitcoinData(new_file_path)
+        InsertTx(tx_st)
+        InsertTxAddress(tx_address_st)
+        os.remove(new_file_path)
+        localLog.infoLog("finish to process : ", new_file_path)
+    else:
+        localLog.infoLog("file is too young: ", file_path)
 
 def main():
-    # tshark -i en0 -b duration:10 -w bitcoin01
-    cap_dir_path = '../../../03,データセット/*.cap'
+    cap_dir_path = ""
+    try:
+        cap_dir_path = os.environ['BITCOIN_CAP_FILE_PATH']
+    except Exception as e:
+        localLog.warningLog("please set BITCOIN_CAP_FILE_PATH to env var")
+        exit()
+    cap_dir_path += "*"
     while True:
         file_path_list = glob.glob(cap_dir_path)
         if file_path_list == []:
@@ -343,7 +364,7 @@ def main():
                 process_list[process_num].start()
         for process_num in range(len(process_list)):
                 process_list[process_num].join()
-
+        time.sleep(1)
 
 
 if __name__ == '__main__':
