@@ -150,6 +150,8 @@ def GetAddressFromPublicKeyByVersionInOutput(version, public_key):
         return ScriptToAddress("00"+public_key)
     elif version == 5:
         return ConvertPKHToAddress(b'\x05', bytearray.fromhex(public_key))
+    else:
+        return "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 def GetAddressFromPublicKeyByVersionInInput(version, public_key):
     localLog.debugLog("start GetAddressFromPublicKeyByVersionInInput")
@@ -307,7 +309,11 @@ def InsertTxAddress(tx_address_st):
         for tx_address in tx_address_st:
             sql += ' ("'
             sql += tx_address["TX_ID"] + '", "'
-            sql += tx_address["ADDRESS"] + '", "'
+            try:
+                sql += tx_address["ADDRESS"] + '", "'
+            except Exception as e:
+                localLog.warningLog(tx_address)
+                localLog.warningLog(e)
             sql += tx_address["IN_OUT_FLAG"] + '"),'
         sql = sql[:-1]
         try:

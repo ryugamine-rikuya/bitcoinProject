@@ -1,3 +1,5 @@
+CREATE DATABASE `Bitcoin`;
+
 CREATE TABLE Bitcoin.TX (
   `ID` bigint(20) NOT NULL AUTO_INCREMENT,
   `TX_ID` varchar(255) DEFAULT NULL,
