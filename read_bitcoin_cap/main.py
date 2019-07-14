@@ -14,6 +14,10 @@ import os
 from multiprocessing import Process
 from datetime import datetime
 
+HOST = '127.0.0.1'
+USER = 'root'
+PASSWORD = ''
+DB = 'Bitcoin'
 
 
 class Log:
@@ -283,7 +287,7 @@ def InsertTx(tx_st):
     localLog.debugLog("start InsertTxAddress")
     if tx_st != []:
         sql = "INSERT INTO TX (TX_ID, TIME, SRC_IP, DST_IP) VALUES"
-        con = pymysql.connect(host='127.0.0.1',user='root',password='',db='Bitcoin',charset='utf8',cursorclass=pymysql.cursors.DictCursor)
+        pymysql.connect(host=HOST,user=USER,password=PASSWORD,db=DB,charset='utf8',cursorclass=pymysql.cursors.DictCursor)
         cur = con.cursor()
         for tx in tx_st:
             sql += ' ("'
@@ -304,7 +308,7 @@ def InsertTxAddress(tx_address_st):
     localLog.debugLog("start InsertTxAddress")
     if tx_address_st != []:
         sql = "INSERT INTO TX_ADDRESS (TX_ID, ADDRESS, IN_OUT_FLAG) VALUES"
-        con = pymysql.connect(host='127.0.0.1',user='root',password='',db='Bitcoin',charset='utf8',cursorclass=pymysql.cursors.DictCursor)
+        con = pymysql.connect(host=HOST,user=USER,password=PASSWORD,db=DB,charset='utf8',cursorclass=pymysql.cursors.DictCursor)
         cur = con.cursor()
         for tx_address in tx_address_st:
             sql += ' ("'
