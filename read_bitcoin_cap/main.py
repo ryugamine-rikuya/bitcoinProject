@@ -247,14 +247,10 @@ def GetBitcoinData(file_path):
     cap = pyshark.FileCapture(file_path, include_raw=True, use_json=True, keep_packets=False)
     tx_st = []
     tx_address_st = []
-    num = 0
     for packet in cap:
         if "BITCOIN" in packet:
             txid = GetTXID(packet)
             if txid != None:
-                if num == 10:
-                    break
-                num += 1
                 src_ip = GetSrtIpFromPacket(packet)
                 dst_ip = GetDstIpFromPacket(packet)
                 time = GetTimeFromPacket(packet)
