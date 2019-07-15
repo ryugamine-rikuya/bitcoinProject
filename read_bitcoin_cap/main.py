@@ -11,10 +11,9 @@ import glob
 import shutil
 import time
 import os
-#from multiprocessing import Process
 import multiprocessing
 from datetime import datetime
-#1ArS7HcyMf4e5Jt5VuAVKZZMUbAPNqjcU7
+
 
 HOST = '127.0.0.1'
 USER = 'root'
@@ -250,7 +249,7 @@ def GetTXID(packet):
 
 def GetBitcoinData(file_path):
     localLog.debugLog("start GetBitcoinData")
-    cap = pyshark.FileCapture(file_path, include_raw=True, use_json=True, keep_packets=False, display_filter='ip.len lt 1500')
+    cap = pyshark.FileCapture(file_path, include_raw=True, use_json=True, keep_packets=False, display_filter='bitcoin.command != block')
     tx_st = []
     tx_address_st = []
     num = 1
@@ -377,7 +376,6 @@ def main():
             for process_num in range(len(process_list)):
                 process_list[process_num].join()
         time.sleep(1)
-
 
 if __name__ == '__main__':
     main()
