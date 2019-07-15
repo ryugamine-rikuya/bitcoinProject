@@ -11,8 +11,10 @@ import glob
 import shutil
 import time
 import os
-from multiprocessing import Process
+#from multiprocessing import Process
+import multiprocessing
 from datetime import datetime
+#1ArS7HcyMf4e5Jt5VuAVKZZMUbAPNqjcU7
 
 HOST = '127.0.0.1'
 USER = 'root'
@@ -111,7 +113,6 @@ def GetOpecodeFromScript(script):
     except:
          return None
     return opcode.split(" ")
-
 
 def GetVersionAndPublicKeyFromBitcoinScript(script):
     localLog.debugLog("start GetVersionAndPublicKeyFromBitcoinScript")
@@ -218,7 +219,6 @@ def GetOutputDataFromPacket(packet):
                     addresses.append(GetAddressFromPublicKeyByVersionInOutput(version, public_key))
     return addresses
 
-
 def GetSrtIpFromPacket(packet):
     localLog.debugLog("start GetSrtIpFromPacket")
     if packet["IP"].get_field_value('src_host'):
@@ -250,9 +250,10 @@ def GetTXID(packet):
 
 def GetBitcoinData(file_path):
     localLog.debugLog("start GetBitcoinData")
-    cap = pyshark.FileCapture(file_path, include_raw=True, use_json=True, keep_packets=False)
+    cap = pyshark.FileCapture(file_path, include_raw=True, use_json=True, keep_packets=False, display_filter='ip.len lt 1500')
     tx_st = []
     tx_address_st = []
+    num = 1
     for packet in cap:
         if "BITCOIN" in packet:
             txid = GetTXID(packet)
@@ -281,13 +282,14 @@ def GetBitcoinData(file_path):
                 tx["SRC_IP"] = src_ip
                 tx["DST_IP"] = dst_ip
                 tx_st.append(tx)
+        num += 1
     return tx_st, tx_address_st
 
 def InsertTx(tx_st):
     localLog.debugLog("start InsertTxAddress")
     if tx_st != []:
         sql = "INSERT INTO TX (TX_ID, TIME, SRC_IP, DST_IP) VALUES"
-        pymysql.connect(host=HOST,user=USER,password=PASSWORD,db=DB,charset='utf8',cursorclass=pymysql.cursors.DictCursor)
+        con = pymysql.connect(host=HOST,user=USER,password=PASSWORD,db=DB,charset='utf8',cursorclass=pymysql.cursors.DictCursor)
         cur = con.cursor()
         for tx in tx_st:
             sql += ' ("'
@@ -363,12 +365,16 @@ def main():
         if file_path_list == []:
             localLog.infoLog("file is nothing.")
             time.sleep(10)
-        process_list = []
-        for file_path in file_path_list:
-            process_list.append(Process(target=ProcessCapFile, args=(file_path,)))
-        for process_num in range(len(process_list)):
+        cpu_num = multiprocessing.cpu_count()
+        period = int(len(file_path_list) / cpu_num) + 1
+        for period_num in range(period):
+            process_list = []
+            for file_num in range(period_num * cpu_num, (period_num + 1) * cpu_num):
+                if file_num < len(file_path_list):
+                    process_list.append(multiprocessing.Process(target=ProcessCapFile, args=(file_path_list[file_num],)))
+            for process_num in range(len(process_list)):
                 process_list[process_num].start()
-        for process_num in range(len(process_list)):
+            for process_num in range(len(process_list)):
                 process_list[process_num].join()
         time.sleep(1)
 
