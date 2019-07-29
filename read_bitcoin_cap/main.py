@@ -13,6 +13,7 @@ import time
 import os
 import multiprocessing
 from datetime import datetime
+import dateutil.parser
 
 
 HOST = '127.0.0.1'
@@ -200,6 +201,7 @@ def GetInputDataFromPacket(packet):
 def GetOutputDataFromPacket(packet):
     localLog.debugLog("start GetOutputDataFromPacket")
     addresses = []
+    values = []
     if packet["BITCOIN"].get_field_value('command') == "tx" and packet["BITCOIN"].get_field_value('tx').get_field_value('output_count') != "0":
         output_count = int(packet["BITCOIN"].get_field_value('tx').get_field_value('output_count'))
         output_list = packet["BITCOIN"].get_field_value('tx').get_field_value('out')
@@ -234,7 +236,7 @@ def GetDstIpFromPacket(packet):
 
 def GetTimeFromPacket(packet):
     localLog.debugLog("start GetTimeFromPacket")
-    return packet.sniff_timestamp
+    return str(dateutil.parser.parse(packet.sniff_timestamp))
 
 def GetTXID(packet):
     localLog.debugLog("start GetTXID")
@@ -260,27 +262,28 @@ def GetBitcoinData(file_path):
                 src_ip = GetSrtIpFromPacket(packet)
                 dst_ip = GetDstIpFromPacket(packet)
                 time = GetTimeFromPacket(packet)
-                addresses = GetInputDataFromPacket(packet)
-                for address in addresses:
-                    tx_address = {}
-                    tx_address["TX_ID"] = txid
-                    tx_address["ADDRESS"] = address
-                    tx_address["IN_OUT_FLAG"] = "0"
-                    tx_address_st.append(tx_address)
-
-                addresses = GetOutputDataFromPacket(packet)
-                for address in addresses:
-                    tx_address = {}
-                    tx_address["TX_ID"] = txid
-                    tx_address["ADDRESS"] = address
-                    tx_address["IN_OUT_FLAG"] = "1"
-                    tx_address_st.append(tx_address)
                 tx = {}
                 tx["TX_ID"] = txid
                 tx["TIME"] = time
                 tx["SRC_IP"] = src_ip
                 tx["DST_IP"] = dst_ip
-                tx_st.append(tx)
+                if dst_ip == "133.26.34.230":
+                    tx_st.append(tx)
+                    addresses = GetInputDataFromPacket(packet)
+                    for address in addresses:
+                        tx_address = {}
+                        tx_address["TX_ID"] = txid
+                        tx_address["ADDRESS"] = address
+                        tx_address["IN_OUT_FLAG"] = "0"
+                        tx_address_st.append(tx_address)
+
+                    addresses = GetOutputDataFromPacket(packet)
+                    for address in addresses:
+                        tx_address = {}
+                        tx_address["TX_ID"] = txid
+                        tx_address["ADDRESS"] = address
+                        tx_address["IN_OUT_FLAG"] = "1"
+                        tx_address_st.append(tx_address)
         num += 1
     return tx_st, tx_address_st
 

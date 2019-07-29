@@ -6,19 +6,13 @@ import threading
 import copy
 
 BASE_URL = "https://bitcointalk.org/index.php?action=profile;u={}"
-SQL = "INSERT INTO Users (user_id, name, posts, activity, merit, position, dateregistered, lastactive, icq, aim, msn, yim, email, website, currentstatus, bitcoinaddress, Gender, age, location, locationtime, customtitle) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+SQL = "INSERT INTO Users_new (user_id, name, posts, activity, merit, position, dateregistered, lastactive, icq, aim, msn, yim, email, website, currentstatus, bitcoinaddress, Gender, age, location, locationtime, customtitle) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
 THREAD_NUM = 4
 USER_INFO_LIST = []
 lock = threading.Lock()
 
 def get_info_of_users_at_bitcointalk(start_number, user_number):
-    connection = pymysql.connect(host='127.0.0.1',
-                                 user='root',
-                                 password='',
-                                 db='Bitcoin',
-                                 charset='utf8',
-                                 cursorclass=pymysql.cursors.DictCursor)
-    for number in range(start_number,user_number):
+    for number in reversed(range(start_number,user_number)):
     	print(number)
     	user_info = {
     		"Id":number,
@@ -48,6 +42,7 @@ def get_info_of_users_at_bitcointalk(start_number, user_number):
     		try:
     			r = requests.get(target_url, timeout=4)
     		except:
+    			print("get error")
     			time.sleep(2)
     		else:
     			if (r.status_code == requests.codes.ok):
@@ -55,26 +50,32 @@ def get_info_of_users_at_bitcointalk(start_number, user_number):
     				break
     			else:
     				print(r.status_code)
-
+    				time.sleep(2)
     	soup = BeautifulSoup(r.text, 'lxml')
     	tables = soup.findAll("table")
     	if len(tables) ==  10:
     		trs = tables[5].findAll("tr")[0].findAll("tr")[1].findAll("tr")
     		num = 0
     		for tr in trs:
+    			print("====================")
     			if len(tr.findAll("hr")) == 0:
     				if len(tr.findAll("b")) != 0:
     					key = tr.findAll("b")[0].text.split(":")[0]
+    					print(tr.findAll("b")[0])
+    					print("key === ")
+    					print(key)
     					if  key in user_info:
     						value = tr.findAll("td")[1].text
+    						print(value)
     						user_info[key] = value
     		bitcoin_address = user_info["Bitcoin address"].replace("   ","//")
     		bitcoin_address = bitcoin_address.replace("  ","///")
     		bitcoin_address = bitcoin_address.replace("\n","")
+    		connection = pymysql.connect(host='127.0.0.1',user='root',password='',db='Bitcoin',charset='utf8',cursorclass=pymysql.cursors.DictCursor)
     		with connection.cursor() as cursor:
     		    r = cursor.execute(SQL, (user_info["Id"],user_info["Name"],user_info["Posts"],user_info["Activity"],user_info["Merit"],user_info["Position"],user_info["Date Registered"],user_info["Last Active"],user_info["ICQ"],user_info["AIM"],user_info["MSN"],user_info["YIM"],user_info["Email"],user_info["Website"],user_info["Current Status"],bitcoin_address,user_info["Gender"],user_info["Age"],user_info["Location"],user_info["Local Time"],user_info["Custom Title"]))
     		connection.commit()
-    connection.close()
+    		connection.close()
 
 def get_info_of_users_at_bitcointalk_tmp(thread_number, start_number, user_number):
     print("{} {} {}".format(thread_number, start_number, user_number))
@@ -141,7 +142,7 @@ def insert_user_info():
     connection = pymysql.connect(host='127.0.0.1',
                                  user='root',
                                  password='',
-                                 db='Bitcoin2019',
+                                 db='Bitcoin',
                                  charset='utf8',
                                  cursorclass=pymysql.cursors.DictCursor)
     cursor = connection.cursor()
@@ -167,8 +168,8 @@ def insert_user_info():
 
 
 def main():
-    start_number= 2258182
-    #start_number= 2423987
+    #start_number= 2258182
+    start_number= 2627729
     user_number = 2637581
 
     thread_list = []
