@@ -57,16 +57,11 @@ def get_info_of_users_at_bitcointalk(start_number, user_number):
     		trs = tables[5].findAll("tr")[0].findAll("tr")[1].findAll("tr")
     		num = 0
     		for tr in trs:
-    			print("====================")
     			if len(tr.findAll("hr")) == 0:
     				if len(tr.findAll("b")) != 0:
     					key = tr.findAll("b")[0].text.split(":")[0]
-    					print(tr.findAll("b")[0])
-    					print("key === ")
-    					print(key)
     					if  key in user_info:
     						value = tr.findAll("td")[1].text
-    						print(value)
     						user_info[key] = value
     		bitcoin_address = user_info["Bitcoin address"].replace("   ","//")
     		bitcoin_address = bitcoin_address.replace("  ","///")
