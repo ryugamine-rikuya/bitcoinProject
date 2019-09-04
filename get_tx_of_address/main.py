@@ -2,6 +2,8 @@ import http.client
 import logging
 from logging import getLogger, StreamHandler, Formatter, FileHandler
 from bs4 import BeautifulSoup
+#import mysql.connector
+import sqlalchemy as sa
 import time
 import sys
 import pandas as pd
@@ -9,11 +11,21 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from datetime import datetime
 from datetime import timedelta
+import pickle
+import os
 
 # global var setting
 APP_NAME = "get_tx_of_address"
 DOMAIN = "www.blockchain.com"
 FOLDER = "/ja/btc/address/{}?offset={}"
+TABLE_NAME = "TX_HASH"
+DB_SETTINGS = {
+    "host": "localhost",
+    "database": "Bitcoin",
+    "user": "root",
+    "password": "",
+    "port":3306
+}
 
 # logger setting
 logLevel = logging.DEBUG
@@ -30,8 +42,6 @@ file_handler.setFormatter(handler_format)
 logger.addHandler(file_handler)
 
 def get_page_of_tx(address="", page_num="0"):
-    if address == "":
-        return None
     res = ""
     while True:
         con = http.client.HTTPSConnection(DOMAIN)
@@ -57,6 +67,7 @@ def get_number_of_txs(address):
 
 def get_element_of_tx(address,num_of_txs):
     time_list = []
+    hash_dict = {"hash":[],"date":[]}
     num_of_txs += 49
     for num in range(0, num_of_txs, 50):
         html_status, html_text = get_page_of_tx(address, num)
@@ -66,27 +77,37 @@ def get_element_of_tx(address,num_of_txs):
         soup = BeautifulSoup(html_text, 'html.parser')
         txs = soup.find_all(class_="txdiv")
         for tx in txs:
+            hash = tx.find(class_="hash-link").text
             time_soups = tx.find_all(class_="pull-right")
             for time_soup in time_soups:
                 time = time_soup.text
                 if "BTC" not in time.split(" "):
                     tmp_time_dict = {}
                     tmp_time_dict["time"] = time
+                    hash_dict["hash"].append(hash)
+                    hash_dict["date"].append(time)
                     time_list.append(tmp_time_dict)
-    return time_list
+    return time_list, hash_dict
+
+def insert_tx_hash_data(df_hash):
+    engine = sa.create_engine('mysql://{user}:{password}@{host}:{port}/{database}'.format(**DB_SETTINGS), echo=True)
+    try:
+        df_hash.to_sql('TX_HASH', engine, index=False, if_exists='append')
+    except Exception as e:
+        logger.warn(e)
 
 def get_address_data(address):
     logger.info("======================")
     logger.info(address)
     num_of_txs = get_number_of_txs(address)
-    time_list = get_element_of_tx(address, num_of_txs)
+    time_list, hash_list = get_element_of_tx(address, num_of_txs)
     df_time = add_col_hh_to_df_time(pd.DataFrame(time_list))
+    df_hash = pd.DataFrame.from_dict(hash_list)
+    insert_tx_hash_data(df_hash)
     df_time['YYYY-MM-DD'] = pd.to_datetime(df_time['YYYY-MM-DD'])
     df_time.sort_values(by='YYYY-MM-DD', inplace=True)
     df_time.reset_index(inplace=True, drop=True)
     return df_time
-
-
 
 def add_col_hh_to_df_time(df_time):
     df_time = pd.concat([df_time, df_time["time"].str.split(" ", n=2, expand=True)], axis=1)
@@ -98,11 +119,11 @@ def add_col_hh_to_df_time(df_time):
     df_time["hh"] = df_time.hh.astype('int32')
     return df_time
 
-
 def insert_data():
     pass
 
 def make_graph_of_address_by_hour(df_time, address, time_zone):
+    logger.info("make_graph_of_address_by_hour")
     tx_count_list = []
     for i in range(24):
         time = (i - time_zone + 24) % 24
@@ -114,7 +135,7 @@ def make_graph_of_address_by_hour(df_time, address, time_zone):
     plt.xlabel("hour")
     plt.ylabel("count")
     plt.plot(count_df_time["count"])
-    plt.savefig("{}_by_hour.png".format(address))
+    plt.savefig("./image/{}_by_hour.png".format(address))
     plt.clf()
 
 def make_df_count_from_df_time(df_time):
@@ -136,6 +157,7 @@ def make_df_count_from_df_time(df_time):
     return pd.DataFrame(data={'date': date_list, 'count': count_list}, columns=['date', 'count']), df_time.iloc[0]['YYYY-MM-DD'].strftime("%Y-%m-%d %H:%M:%S"), num_of_days
 
 def make_graph_of_address_by_day(df_time, address, time_zone):
+    logger.info("make_graph_of_address_by_day")
     df_count, first_day, num_of_days = make_df_count_from_df_time(df_time)
     df_count['date'] = pd.to_datetime(df_count['date'])
     x1 = pd.date_range(first_day, periods=num_of_days,freq='d')
@@ -145,17 +167,28 @@ def make_graph_of_address_by_day(df_time, address, time_zone):
     ax.set_xlabel('date')
     ax.set_ylabel('count')
     ax.set_title('{}'.format(address))
-    plt.savefig("{}_by_days.png".format(address))
+    plt.savefig("./image/{}_by_days.png".format(address))
     plt.clf()
-
 
 def main():
     args = sys.argv
-    time_zone = -4
+    if len(args) == 1:
+        logger.info("please set address")
+        exit()
     address = args[1]
-    df_time = get_address_data(address)
+    time_zone = -4
+    file_path = "./pickle/{}.pkl".format(address)
+
+    if os.path.isfile(file_path):
+        logger.info("read {}".format(file_path))
+        df_time = pickle.load( open(file_path, "rb" ) )
+    else:
+        logger.info("make {}".format(file_path))
+        df_time = get_address_data(address)
+    exit()
     make_graph_of_address_by_day(df_time, address, time_zone)
     make_graph_of_address_by_hour(df_time, address, time_zone)
+    #pickle.dump( df_time, open(file_path, "wb" ) )
 
 if __name__ == "__main__":
     main()
