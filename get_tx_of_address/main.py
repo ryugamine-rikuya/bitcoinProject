@@ -17,8 +17,10 @@ import os
 # global var setting
 APP_NAME = "get_tx_of_address"
 DOMAIN = "www.blockchain.com"
-FOLDER = "/ja/btc/address/{}?offset={}"
-TABLE_NAME = "TX_HASH"
+ADDRESS_FOLDER = "/ja/btc/address/{}?offset={}"
+TX_FOLDER = "/ja/btc/tx/{}"
+TX_HASH_TABLE_NAME = "TX_HASH"
+TX_HASH_ADDRESS_TABLE_NAME = "TX_HASH_ADDRESS"
 DB_SETTINGS = {
     "host": "localhost",
     "database": "Bitcoin",
@@ -42,10 +44,17 @@ file_handler.setFormatter(handler_format)
 logger.addHandler(file_handler)
 
 def get_page_of_tx(address="", page_num="0"):
-    res = ""
+    url = ADDRESS_FOLDER.format(address, page_num)
+    return get_https_request(url)
+
+def get_page_of_tx_detail(tx_hash):
+    url = TX_FOLDER.format(tx_hash)
+    return get_https_request(url)
+
+def get_https_request(url):
     while True:
         con = http.client.HTTPSConnection(DOMAIN)
-        con.request("GET", FOLDER.format(address, page_num))
+        con.request("GET", url)
         res = con.getresponse()
         if res.status == 200:
             break
@@ -58,9 +67,6 @@ def get_page_of_tx(address="", page_num="0"):
 
 def get_number_of_txs(address):
     html_status, html_text = get_page_of_tx(address)
-    if html_status == None:
-        logger.warning("please enter address into argument")
-        return 0
     soup = BeautifulSoup(html_text, 'html.parser')
     num_of_txs = soup.find(id="n_transactions")
     return int(num_of_txs.text)
@@ -71,9 +77,6 @@ def get_element_of_tx(address,num_of_txs):
     num_of_txs += 49
     for num in range(0, num_of_txs, 50):
         html_status, html_text = get_page_of_tx(address, num)
-        if html_status == None:
-            logger.warning("please enter address into argument")
-            return None
         soup = BeautifulSoup(html_text, 'html.parser')
         txs = soup.find_all(class_="txdiv")
         for tx in txs:
@@ -89,10 +92,30 @@ def get_element_of_tx(address,num_of_txs):
                     time_list.append(tmp_time_dict)
     return time_list, hash_dict
 
-def insert_tx_hash_data(df_hash):
+def get_element_of_tx_detail(tx_hash):
+    html_status, html_text = get_page_of_tx_detail(tx_hash)
+    soup = BeautifulSoup(html_text, 'html.parser')
+    txtds = soup.find_all(class_="txtd")
+    address_dict = {"hash":[],"address":[],"IN_OUT":[]}
+    inupt_address_and_value_list = "".join(txtds[0].text).split("BTC")
+    for address in inupt_address_and_value_list:
+        address_dict["hash"].append(tx_hash)
+        address_dict["address"].append(address)
+        address_dict["IN_OUT"].append(0)
+    output_address_and_value_list = "".join(txtds[1].text).split("BTC")
+    for outupt_address_and_value in output_address_and_value_list:
+        address = outupt_address_and_value.split(" ")[0]
+        if address =="":
+            continue
+        address_dict["hash"].append(tx_hash)
+        address_dict["address"].append(address)
+        address_dict["IN_OUT"].append(1)
+    return address_dict
+
+def insert_data(df, table_name):
     engine = sa.create_engine('mysql://{user}:{password}@{host}:{port}/{database}'.format(**DB_SETTINGS), echo=True)
     try:
-        df_hash.to_sql('TX_HASH', engine, index=False, if_exists='append')
+        df.to_sql(table_name, engine, index=False, if_exists='append')
     except Exception as e:
         logger.warn(e)
 
@@ -102,8 +125,12 @@ def get_address_data(address):
     num_of_txs = get_number_of_txs(address)
     time_list, hash_list = get_element_of_tx(address, num_of_txs)
     df_time = add_col_hh_to_df_time(pd.DataFrame(time_list))
+    for tx_hash in hash_list["hash"]:
+        hash_address_list = get_element_of_tx_detail(tx_hash)
+        df_hash_address = pd.DataFrame.from_dict(hash_address_list)
+        insert_data(df_hash_address, TX_HASH_ADDRESS_TABLE_NAME)
     df_hash = pd.DataFrame.from_dict(hash_list)
-    insert_tx_hash_data(df_hash)
+    insert_data(df_hash, TX_HASH_TABLE_NAME)
     df_time['YYYY-MM-DD'] = pd.to_datetime(df_time['YYYY-MM-DD'])
     df_time.sort_values(by='YYYY-MM-DD', inplace=True)
     df_time.reset_index(inplace=True, drop=True)
@@ -118,9 +145,6 @@ def add_col_hh_to_df_time(df_time):
     df_time.rename(columns={0:"hh",1:"mm",2:"dd"},inplace=True)
     df_time["hh"] = df_time.hh.astype('int32')
     return df_time
-
-def insert_data():
-    pass
 
 def make_graph_of_address_by_hour(df_time, address, time_zone):
     logger.info("make_graph_of_address_by_hour")
