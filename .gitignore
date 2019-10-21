@@ -1,0 +1,6 @@
+*.cap
+*.log
+*.csv
+tmp/*
+data/*
+!.gitkeep
